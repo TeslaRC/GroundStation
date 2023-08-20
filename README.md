@@ -42,7 +42,7 @@ TeslaRC Ground Station is designed to provide a comprehensive control interface 
 
 3. Open the `TeslaRC.sln` solution file in your preferred IDE (Visual Studio, Visual Studio Code, etc.).
 
-4. Build the solution to compile the application.
+4. Build the solution to compile the application. (remember, move `LogitechSteeringWheelEnginesWrapper.dll` from lib/ to working directory of your app (that's where your exe is))
 
 5. Connect your Logitech G27 steering wheel (if available) to your computer.
 
