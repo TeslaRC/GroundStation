@@ -1,4 +1,4 @@
-# Ground Station
+# Ground Station for 4G FPV RC Car
 
 This repository contains the source code and information for the TeslaRC Ground Station, which is used to control an RC FPV car equipped with high-definition video streaming, 2-way RC control signals, and more.
 
