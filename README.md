@@ -23,6 +23,7 @@ TeslaRC Ground Station is designed to provide a comprehensive control interface 
 - Support for Logitech steering wheels for precise control.
 - Keyboard support for basic control functions.
 - User-friendly graphical interface for easy interaction.
+- Simulated gearbox for immerse
 
 ## Getting Started
 
