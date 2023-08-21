@@ -108,6 +108,23 @@ namespace TeslaRC
             adapter.HandleEvents(true);
 
         }
+
+        //resolution change
+        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            /*
+                  res     index
+                430x254     0
+                537x315     1
+                645x378     2
+                753x441     3
+                861x504     4
+                969x567     5
+                1024x598    6
+            */
+
+            UpdateESC(comboBox1.SelectedIndex);
+        }
         #endregion
 
         #region Logitech Steering Wheel Handling
