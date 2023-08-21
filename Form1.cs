@@ -37,9 +37,12 @@ namespace TeslaRC
         }
         #endregion
 
-        public TeslaRC()
+        #region tickers, init functions
+        private void setupform()
         {
             InitializeComponent();
+
+            KeyPreview = true;
 
             programtext.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.None;
 
@@ -58,6 +61,12 @@ namespace TeslaRC
             GtkSharp.GstreamerSharp.ObjectManager.Initialize();
             _videoPanelHandle = panel1.Handle;
             InitGStreamerPipeline();
+        }
+        #endregion
+
+        public TeslaRC()
+        {
+            setupform();
         }
 
         #region GStreamer video
@@ -197,6 +206,7 @@ namespace TeslaRC
 
         #endregion
 
+        #region ESC
         private void UpdateESC(int value)
         {
             if (value != previousThrottleValuee)
@@ -225,6 +235,7 @@ namespace TeslaRC
                 previousThrottleValuee = value;
             }
         }
+        #endregion
 
         #region Keyboard
         private void keydown(object sender, KeyEventArgs e)
