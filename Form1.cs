@@ -5,7 +5,8 @@ using System;
 using System.Drawing;
 using System.Net.Sockets;
 using System.Windows.Forms;
-
+using GLib;
+using EventArgs = System.EventArgs;
 
 namespace TeslaRC
 {
@@ -13,6 +14,9 @@ namespace TeslaRC
     {
         #region Definitions
         int throttle = 1500;
+        //                       1  2   3   4   5   R   R
+        int[] gears = new int[] { 8, 9, 10, 11, 12, 13, 14 };
+        int current_gear;
         private Timer g27;
         private int logi_index = -1;
         private int previousAccelerationValue_g27 = 1500;
@@ -112,54 +116,6 @@ namespace TeslaRC
             return LogitechGSDK.LogiIsConnected(0) || LogitechGSDK.LogiIsConnected(1);
         }
 
-        private void g27_timer_tick(object sender, EventArgs e)
-        {
-            if (checkBox1.Checked)
-                LogitechGSDK.LogiSteeringInitialize(true);
-            else
-                return;
-
-            if (!IsConnectedToG27())
-            {
-                g27.Stop();
-                return;
-            }
-
-            if (LogitechGSDK.LogiUpdate()) //onformclosing trzeba call gdzies 
-            {
-                //g27 index
-                logi_index = 0;
-
-                //init logi state
-                LogitechGSDK.DIJOYSTATE2ENGINES controllerState = LogiGetStateCSharp(logi_index);
-
-                //init values of steering
-                int steering = Map(controllerState.lX, 32767, -32767, 2181, 2001);
-                int throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 2000);
-                int brakeValue = Map(controllerState.lRz, 32767, -32767, 1500, 1000);
-                int finalValueAccel = (brakeValue < 1500) ? brakeValue : throttleValue;
-
-                // throttle based LEDs
-                float currentRPM = Map(throttleValue, 1550, 2000, 1500f, 6000f);
-                LogitechGSDK.LogiPlayLeds(logi_index, currentRPM, 1500f, 6000f);
-
-                //apperance things
-                apperance(controllerState);
-
-                if (finalValueAccel != previousAccelerationValue_g27)
-                {
-                    UpdateESC(finalValueAccel); // Acceleration/braking
-                    previousAccelerationValue_g27 = finalValueAccel;
-                }
-
-                if (steering != previousSteeringValue_g27)
-                {
-                    UpdateESC(steering); // Steering
-                    previousSteeringValue_g27 = steering;
-                }
-            }
-        }
-
         private void apperance(DIJOYSTATE2ENGINES controllerState)
         {
             //progress bars
@@ -193,6 +149,138 @@ namespace TeslaRC
             }
         }
 
+        static void getgear(ref int x, int[] gearvar)
+        {
+            for (int i = 0; i < gearvar.Length; i++)
+            {
+                if (LogitechGSDK.LogiButtonTriggered(0, gearvar[i]))
+                {
+                    x = i + 1;
+                    break;
+                }
+            }
+        }
+
+        private void hshifter()
+        {
+            if (!checkBox4.Checked)
+                return;
+
+            getgear(ref current_gear, gears);
+
+            label4.BackColor = SystemColors.Control;
+            label10.BackColor = SystemColors.Control;
+            label8.BackColor = SystemColors.Control;
+            label11.BackColor = SystemColors.Control;
+            label9.BackColor = SystemColors.Control;
+            label12.BackColor = SystemColors.Control;
+
+            switch (current_gear)
+            {
+                case 1:
+                    label4.BackColor = Color.IndianRed;
+                    break;
+                case 2:
+                    label10.BackColor = Color.IndianRed;
+                    break;
+                case 3:
+                    label8.BackColor = Color.IndianRed;
+                    break;
+                case 4:
+                    label11.BackColor = Color.IndianRed;
+                    break;
+                case 5:
+                    label9.BackColor = Color.IndianRed;
+                    break;
+                case 6:
+                case 7:
+                    label12.BackColor = Color.IndianRed;
+                    break;
+            }
+        }
+
+        private void g27_timer_tick(object sender, EventArgs e)
+        {
+            if (checkBox1.Checked) { 
+                LogitechGSDK.LogiSteeringInitialize(true); checkBox4.Enabled = true;
+            }
+            else {
+                checkBox4.Enabled = false;
+                checkBox4.Checked = false;
+                return;
+            }
+
+            if (!IsConnectedToG27())
+            {
+                g27.Stop();
+                return;
+            }
+
+            if (LogitechGSDK.LogiUpdate()) //onformclosing trzeba call gdzies 
+            {
+                //g27 index
+                logi_index = 0;
+
+                //init logi state
+                LogitechGSDK.DIJOYSTATE2ENGINES controllerState = LogiGetStateCSharp(logi_index);
+
+                //init values of steering
+                int steering = Map(controllerState.lX, 32767, -32767, 2181, 2001);
+                int throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 2000);
+                int brakeValue = Map(controllerState.lRz, 32767, -32767, 1500, 1000);
+                if (checkBox4.Checked)
+                {
+                    switch (current_gear)
+                    {
+                        case 1:
+                            throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 1600);
+                            break;
+                        case 2:
+                            throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 1700);
+                            break;
+                        case 3:
+                            throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 1800);
+                            break;
+                        case 4:
+                            throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 1900);
+                            break;
+                        case 5:
+                            throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 2000);
+                            break;
+                        case 6:
+                        case 7:
+                            throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 0);
+                            break;
+                    }
+                }
+
+                int finalValueAccel = (brakeValue < 1500) ? brakeValue : throttleValue;
+
+                // throttle based LEDs
+                float currentRPM = Map(throttleValue, 1550, 2000, 1500f, 6000f);
+                LogitechGSDK.LogiPlayLeds(logi_index, currentRPM, 1500f, 6000f);
+
+                //shifter
+                hshifter();
+
+                //apperance things
+                apperance(controllerState);
+
+                if (finalValueAccel != previousAccelerationValue_g27)
+                {
+                    UpdateESC(finalValueAccel); // Acceleration/braking
+                    previousAccelerationValue_g27 = finalValueAccel;
+                }
+
+                if (steering != previousSteeringValue_g27)
+                {
+                    UpdateESC(steering); // Steering
+                    previousSteeringValue_g27 = steering;
+                }
+            }
+        }
+
+        //security
         private void TeslaRC_LostFocus(object sender, EventArgs e)
         {
             g27.Stop();
