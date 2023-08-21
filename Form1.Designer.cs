@@ -47,6 +47,12 @@ namespace TeslaRC
             this.pictureBox2 = new System.Windows.Forms.PictureBox();
             this.pictureBox3 = new System.Windows.Forms.PictureBox();
             this.panel1 = new System.Windows.Forms.Panel();
+            this.comboBox1 = new System.Windows.Forms.ComboBox();
+            this.res = new System.Windows.Forms.Label();
+            this.label6 = new System.Windows.Forms.Label();
+            this.comboBox2 = new System.Windows.Forms.ComboBox();
+            this.label7 = new System.Windows.Forms.Label();
+            this.comboBox3 = new System.Windows.Forms.ComboBox();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox2)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox3)).BeginInit();
@@ -198,16 +204,103 @@ namespace TeslaRC
             // 
             // panel1
             // 
-            this.panel1.Location = new System.Drawing.Point(327, 10);
+            this.panel1.BackColor = System.Drawing.SystemColors.ActiveCaptionText;
+            this.panel1.Location = new System.Drawing.Point(9, 242);
             this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(388, 226);
+            this.panel1.Size = new System.Drawing.Size(503, 318);
             this.panel1.TabIndex = 30;
+            // 
+            // comboBox1
+            // 
+            this.comboBox1.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboBox1.Enabled = false;
+            this.comboBox1.FormattingEnabled = true;
+            this.comboBox1.Items.AddRange(new object[] {
+            "430x254",
+            "537x315",
+            "645x378",
+            "753x441",
+            "861x504",
+            "969x567",
+            "1024x598"});
+            this.comboBox1.Location = new System.Drawing.Point(391, 8);
+            this.comboBox1.Name = "comboBox1";
+            this.comboBox1.Size = new System.Drawing.Size(121, 21);
+            this.comboBox1.TabIndex = 32;
+            // 
+            // res
+            // 
+            this.res.AutoSize = true;
+            this.res.Location = new System.Drawing.Point(328, 11);
+            this.res.Name = "res";
+            this.res.Size = new System.Drawing.Size(57, 13);
+            this.res.TabIndex = 33;
+            this.res.Text = "Resolution";
+            // 
+            // label6
+            // 
+            this.label6.AutoSize = true;
+            this.label6.Location = new System.Drawing.Point(330, 41);
+            this.label6.Name = "label6";
+            this.label6.Size = new System.Drawing.Size(54, 13);
+            this.label6.TabIndex = 35;
+            this.label6.Text = "Framerate";
+            // 
+            // comboBox2
+            // 
+            this.comboBox2.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboBox2.Enabled = false;
+            this.comboBox2.FormattingEnabled = true;
+            this.comboBox2.Items.AddRange(new object[] {
+            "10",
+            "20",
+            "30"});
+            this.comboBox2.Location = new System.Drawing.Point(390, 38);
+            this.comboBox2.Name = "comboBox2";
+            this.comboBox2.Size = new System.Drawing.Size(121, 21);
+            this.comboBox2.TabIndex = 34;
+            // 
+            // label7
+            // 
+            this.label7.AutoSize = true;
+            this.label7.Location = new System.Drawing.Point(345, 71);
+            this.label7.Name = "label7";
+            this.label7.Size = new System.Drawing.Size(39, 13);
+            this.label7.TabIndex = 37;
+            this.label7.Text = "Quality";
+            // 
+            // comboBox3
+            // 
+            this.comboBox3.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboBox3.Enabled = false;
+            this.comboBox3.FormattingEnabled = true;
+            this.comboBox3.Items.AddRange(new object[] {
+            "100",
+            "90",
+            "80",
+            "70",
+            "60",
+            "50",
+            "40",
+            "30",
+            "20",
+            "10"});
+            this.comboBox3.Location = new System.Drawing.Point(390, 68);
+            this.comboBox3.Name = "comboBox3";
+            this.comboBox3.Size = new System.Drawing.Size(121, 21);
+            this.comboBox3.TabIndex = 36;
             // 
             // TeslaRC
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(722, 240);
+            this.ClientSize = new System.Drawing.Size(523, 572);
+            this.Controls.Add(this.label7);
+            this.Controls.Add(this.comboBox3);
+            this.Controls.Add(this.label6);
+            this.Controls.Add(this.comboBox2);
+            this.Controls.Add(this.res);
+            this.Controls.Add(this.comboBox1);
             this.Controls.Add(this.panel1);
             this.Controls.Add(this.pictureBox3);
             this.Controls.Add(this.pictureBox2);
@@ -256,6 +349,12 @@ namespace TeslaRC
         private System.Windows.Forms.PictureBox pictureBox2;
         private System.Windows.Forms.PictureBox pictureBox3;
         private System.Windows.Forms.Panel panel1;
+        private System.Windows.Forms.ComboBox comboBox1;
+        private System.Windows.Forms.Label res;
+        private System.Windows.Forms.Label label6;
+        private System.Windows.Forms.ComboBox comboBox2;
+        private System.Windows.Forms.Label label7;
+        private System.Windows.Forms.ComboBox comboBox3;
     }
 }
 

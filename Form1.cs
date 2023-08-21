@@ -163,9 +163,9 @@ namespace TeslaRC
         private void apperance(DIJOYSTATE2ENGINES controllerState)
         {
             //progress bars
-            pictureBox1.Width = Map(controllerState.lX, 32767, -32767, 142, 0); //steering
-            pictureBox2.Width = Map(controllerState.lY, 32767, -32767, 0, 142); //throttle
-            pictureBox3.Width = Map(controllerState.lRz, 32767, -32767, 0, 142); //brake
+            pictureBox1.Width = Map(controllerState.lX, 32767, -32767, 330, 0); //steering
+            pictureBox2.Width = Map(controllerState.lY, 32767, -32767, 0, 330); //throttle
+            pictureBox3.Width = Map(controllerState.lRz, 32767, -32767, 0, 330); //brake
 
 
             // w s a d keys
