@@ -302,11 +302,18 @@ namespace TeslaRC
                 // Send throttle value to the LAN device
                 string ipAddress = "172.26.173.165"; // LAN IP
                 int port = 12345; // LAN PORT
-
-                programtext.AppendText($"Throttle/Steering: {value}\n");
-                programtext.SelectionStart = programtext.Text.Length;
-                programtext.ScrollToCaret();
-
+                
+                if (value >= 1000 && value <= 2000)
+                {
+                    programtext.AppendText($"Throttle: {value}\n");
+                    programtext.SelectionStart = programtext.Text.Length;
+                    programtext.ScrollToCaret();
+                } else if (value >= 2001 && value <= 2181)
+                {
+                    programtext.AppendText($"Steering: {value-2000}\n");
+                    programtext.SelectionStart = programtext.Text.Length;
+                    programtext.ScrollToCaret();
+                }
 
                 using (UdpClient udpClient = new UdpClient())
                 {
