@@ -65,7 +65,7 @@ This project is licensed under the **GNU GPL** license. You are free to use, mod
 
 ## Acknowledgements
 
-- The TeslaRC Ground Station software is developed by [tesla](https://github.com/tesla15).
+- The TeslaRC Ground Station software is developed by [tesla](https://github.com/tesla15) and [arin](https://github.com/arin2115).
 - Special thanks to contributors and the open-source community for their valuable contributions and support.
 
 ---
