@@ -5,28 +5,58 @@ using System;
 using System.Drawing;
 using System.Net.Sockets;
 using System.Windows.Forms;
-using GLib;
 using EventArgs = System.EventArgs;
+using System.Linq;
+using System.Windows.Input;
+using Newtonsoft.Json.Linq;
+using SocketIOClient;
+using TeslaRC_Controller;
 
 namespace TeslaRC
 {
     public partial class TeslaRC : Form
     {
         #region Definitions
-        int throttle = 1500;
-        //                       1  2   3   4   5   R   R
+        // Car control
+        Timer kb;
+        // Gears                  1  2   3   4   5   R   R
         int[] gears = new int[] { 8, 9, 10, 11, 12, 13, 14 };
-        int current_gear;
-        private Timer g27;
-        private int logi_index = -1;
-        private int previousAccelerationValue_g27 = 1500;
-        private int previousSteeringValue_g27;
-        DeviceMonitor _devMon;
+        int currentGear;
+        bool reverse = false;
+
+        int previousThrottleValue = -1;
+        int throttle = 1500;
+        int maxThrottle = 2000;
+
+        int previousSteeringValue = -1;
+        int steering = 90;
+
+        int defaultThrottleValue = 1500;
+        int defaultSteeringValue = 90;
+
+        bool focused = true;
+
+        // SocketIO
+        SocketIO sioclient;
+        String socketIP = TeslaRC_Controller.Properties.Settings.Default.serverIP;
+        ushort socketPort = 3001;
+
+        // Video management
+        int videoResolution = 1;
+        int videoFramerate = 30;
+        int videoQuality = 40;
+
+        // Logitech G27 support
+        Timer g27;
+        int logi_index = -1;
+        int previousAccelerationValue_g27 = 1500;
+        int previousSteeringValue_g27;
+
+        // GStreamer stuff
         Pipeline _pipeline;
         IntPtr _videoPanelHandle;
         System.Threading.Thread _mainGlibThread;
         GLib.MainLoop _mainLoop;
-        private int previousThrottleValuee = -1;
         #endregion
 
         #region Math
@@ -41,6 +71,20 @@ namespace TeslaRC
         }
         #endregion
 
+        #region Soundbox      
+        private void soundboxClick(object sender, EventArgs e)
+        {
+            string name = (sender as Button).Text;
+
+            sioclient.EmitAsync("playsound", "{\"name\": \"" + name + "\", \"volume\":\"" + 100 + "\"}");
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            sioclient.EmitAsync("stopsound");
+        }
+        #endregion
+
         #region tickers, init functions
         private void setupform()
         {
@@ -48,23 +92,94 @@ namespace TeslaRC
 
             KeyPreview = true;
 
-            programtext.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.None;
-
-            // Set up the timer to update controller input (logitech g27)
+            // Logitech G27 Support - update timer
             g27 = new Timer();
-            g27.Interval = 1; // Set the interval in milliseconds (adjust as needed)
+            g27.Interval = 1;
             g27.Tick += g27_timer_tick;
             g27.Start();
 
+            // Keyboard update timer
+            kb = new Timer();
+            kb.Interval = 1;
+            kb.Tick += keyDownUpdate;
+            kb.Start();
+
+            // Safety
             LostFocus += TeslaRC_LostFocus;
             GotFocus += TeslaRC_GotFocus;
 
-            throttle = 1500;
+            // Reset throttle & steering
+            throttle = defaultThrottleValue;
+            steering = defaultSteeringValue;
 
+            // GStreamer setup
             Gst.Application.Init();
             GtkSharp.GstreamerSharp.ObjectManager.Initialize();
             _videoPanelHandle = panel1.Handle;
             InitGStreamerPipeline();
+
+            // SocketIO setup
+            sioclient = new SocketIO("http://" + socketIP + ":" + socketPort + "/");
+
+            sioclient.ConnectAsync();
+
+            #region SocketIO events
+            sioclient.OnConnected += (sender, e) =>
+            {
+                Console.WriteLine("Connected to socket.io server");
+
+                // Setup combo boxes
+                comboBox1.Invoke((MethodInvoker)delegate
+                {
+                    comboBox1.SelectedIndex = 0;
+                    comboBox2.SelectedIndex = 2;
+                    comboBox2.Enabled = false;
+                    comboBox3.SelectedIndex = 2;
+
+                    videoResolution = comboBox1.SelectedIndex;
+                    videoFramerate = comboBox2.SelectedIndex;
+                    videoQuality = comboBox3.SelectedIndex;
+                });
+
+                // Reset RC car
+                UpdateESC();
+
+                // Update video
+                UpdateVideo();
+
+                sioclient.EmitAsync("listsounds");
+            };
+
+            sioclient.OnDisconnected += (sender, e) =>
+            {
+                Console.WriteLine("Disconnected from socket.io server");
+
+                sioclient.ConnectAsync();
+            };
+
+            sioclient.On("listsounds", (data) =>
+            {
+                string sounds = data.GetValue<string>();
+
+                string[] soundsList = sounds.Split('|');
+
+                panel2.Controls.Clear();
+
+                for (int i = 0; i < soundsList.Count(); i++)
+                {
+                    // Add button for every element in list
+                    Button myButton = new Button();
+                    myButton.Text = soundsList[i];
+                    myButton.Location = new System.Drawing.Point(4, 4 + i * 29);
+                    myButton.Size = new System.Drawing.Size(106, 23);
+                    myButton.Click += soundboxClick;
+                    panel2.Invoke((MethodInvoker)delegate
+                    {
+                        panel2.Controls.Add(myButton);
+                    });
+                }
+            });
+            #endregion
         }
         #endregion
 
@@ -85,7 +200,6 @@ namespace TeslaRC
             _pipeline.Bus.EnableSyncMessageEmission();
             _pipeline.Bus.SyncMessage += OnBusSyncMessage;
             _pipeline.SetState(State.Playing);
-
         }
 
         void OnBusSyncMessage(object o, SyncMessageArgs args)
@@ -109,7 +223,12 @@ namespace TeslaRC
 
         }
 
-        //resolution change
+        void UpdateVideo()
+        {
+            sioclient.EmitAsync("videodata", $"{videoResolution}|{videoQuality}|{videoFramerate}|{TeslaRC_Controller.Properties.Settings.Default.stationIP}");
+        }
+
+        // Resolution change
         private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
             /*
@@ -123,7 +242,43 @@ namespace TeslaRC
                 1024x598    6
             */
 
-            UpdateESC(comboBox1.SelectedIndex);
+            videoResolution = comboBox1.SelectedIndex;
+            UpdateVideo();
+        }
+
+        // Framerate change
+        private void comboBox2_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            /*
+                framerate    index
+                    10         0
+                    20         1
+                    30         2
+            */
+
+            videoFramerate = comboBox2.SelectedIndex;
+            UpdateVideo();
+        }
+
+        // Quality change
+        private void comboBox3_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            /*
+                quality     index
+                100         9
+                90          8
+                80          7
+                70          6
+                60          5
+                50          4
+                40          3
+                30          2
+                20          1
+                10          0
+            */
+
+            videoQuality = comboBox3.SelectedIndex;
+            UpdateVideo();
         }
         #endregion
 
@@ -133,12 +288,17 @@ namespace TeslaRC
             return LogitechGSDK.LogiIsConnected(0) || LogitechGSDK.LogiIsConnected(1);
         }
 
-        private void apperance(DIJOYSTATE2ENGINES controllerState)
+        private void appearance(DIJOYSTATE2ENGINES controllerState)
         {
-            //progress bars
-            pictureBox1.Width = Map(controllerState.lX, 32767, -32767, 330, 0); //steering
-            pictureBox2.Width = Map(controllerState.lY, 32767, -32767, 0, 330); //throttle
-            pictureBox3.Width = Map(controllerState.lRz, 32767, -32767, 0, 330); //brake
+            // progress bars
+            int leftSize = Map(controllerState.lX, 0, -16363, 5, 87);
+            int leftPosition = 345 - Map(controllerState.lX, -16363, 0, 85, 5);
+            LeftSteering.Location = new Point(leftPosition, 120);                // steering left
+            LeftSteering.Width = leftSize;                                       // steering left
+
+            RightSteering.Width = Map(controllerState.lX, 0, 16363, 5, 87);      // steering right
+            pictureBox2.Width = Map(controllerState.lY, 32767, -32767, 5, 330);  // throttle
+            pictureBox3.Width = Map(controllerState.lRz, 32767, -32767, 5, 330); // brake
 
 
             // w s a d keys
@@ -183,48 +343,31 @@ namespace TeslaRC
             if (!checkBox4.Checked)
                 return;
 
-            getgear(ref current_gear, gears);
+            getgear(ref currentGear, gears);
 
-            label4.BackColor = SystemColors.Control;
-            label10.BackColor = SystemColors.Control;
-            label8.BackColor = SystemColors.Control;
-            label11.BackColor = SystemColors.Control;
-            label9.BackColor = SystemColors.Control;
-            label12.BackColor = SystemColors.Control;
+            updateGearColor();
+        }
 
-            switch (current_gear)
+        private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        {
+            if (checkBox1.Checked)
             {
-                case 1:
-                    label4.BackColor = Color.IndianRed;
-                    break;
-                case 2:
-                    label10.BackColor = Color.IndianRed;
-                    break;
-                case 3:
-                    label8.BackColor = Color.IndianRed;
-                    break;
-                case 4:
-                    label11.BackColor = Color.IndianRed;
-                    break;
-                case 5:
-                    label9.BackColor = Color.IndianRed;
-                    break;
-                case 6:
-                case 7:
-                    label12.BackColor = Color.IndianRed;
-                    break;
+                g27.Start();
+            }
+            else
+            {
+                checkBox3.Enabled = false;
+                checkBox2.Enabled = false;
+                g27.Stop();
             }
         }
 
         private void g27_timer_tick(object sender, EventArgs e)
         {
             if (checkBox1.Checked) { 
-                LogitechGSDK.LogiSteeringInitialize(true); checkBox4.Enabled = true;
-            }
-            else {
-                checkBox4.Enabled = false;
-                checkBox4.Checked = false;
-                return;
+                LogitechGSDK.LogiSteeringInitialize(true);
+                checkBox3.Enabled = true;
+                checkBox2.Enabled = true;
             }
 
             if (!IsConnectedToG27())
@@ -233,176 +376,399 @@ namespace TeslaRC
                 return;
             }
 
-            if (LogitechGSDK.LogiUpdate()) //onformclosing trzeba call gdzies 
+            if (LogitechGSDK.LogiUpdate()) // TODO: Call OnFormClosing
             {
-                //g27 index
+                // g27 index
                 logi_index = 0;
 
-                //init logi state
+                // init logi state
                 LogitechGSDK.DIJOYSTATE2ENGINES controllerState = LogiGetStateCSharp(logi_index);
 
-                //init values of steering
-                int steering = Map(controllerState.lX, 32767, -32767, 2181, 2001);
+                // init values of steering
+                int steeringValue = Map(controllerState.lX, 32767, -32767, 180, 0);
                 int throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 2000);
                 int brakeValue = Map(controllerState.lRz, 32767, -32767, 1500, 1000);
                 if (checkBox4.Checked)
                 {
-                    switch (current_gear)
+                    reverse = false;
+                    switch (currentGear)
                     {
                         case 1:
                             throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 1600);
+                            maxThrottle = 1600;
                             break;
                         case 2:
                             throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 1700);
+                            maxThrottle = 1700;
                             break;
                         case 3:
                             throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 1800);
+                            maxThrottle = 1800;
                             break;
                         case 4:
                             throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 1900);
+                            maxThrottle = 1900;
                             break;
                         case 5:
                             throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 2000);
+                            maxThrottle = 2000;
                             break;
                         case 6:
                         case 7:
                             throttleValue = Map(controllerState.lY, 32767, -32767, 1500, 0);
+                            maxThrottle = 1500;
                             break;
                     }
                 }
 
-                int finalValueAccel = (brakeValue < 1500) ? brakeValue : throttleValue;
+                int finalValueAccel = brakeValue < 1500 ? brakeValue : throttleValue;
 
-                // throttle based LEDs
-                float currentRPM = Map(throttleValue, 1550, 2000, 1500f, 6000f);
-                LogitechGSDK.LogiPlayLeds(logi_index, currentRPM, 1500f, 6000f);
+                if (checkBox3.Checked) // Led effect
+                {
+                    float currentRPM = Map(throttleValue, 1550, 2000, 1500f, 6000f);
+                    LogitechGSDK.LogiPlayLeds(logi_index, currentRPM, 1500f, 6000f);
+                }
 
-                //shifter
+                if (checkBox2.Checked) // Spring effect
+                {
+                    LogitechGSDK.LogiPlaySpringForce(logi_index, 0, 40, 40);
+                } else
+                {
+                    LogitechGSDK.LogiPlaySpringForce(logi_index, 0, 0, 0);
+                }
+
+                if (checkBox5.Checked) // Feedback effect
+                {
+
+                }
+
+                // Shifter
                 hshifter();
 
-                //apperance things
-                apperance(controllerState);
+                // Appearance things
+                appearance(controllerState);
 
                 if (finalValueAccel != previousAccelerationValue_g27)
                 {
-                    UpdateESC(finalValueAccel); // Acceleration/braking
+                    throttle = finalValueAccel;
+                    UpdateESC(); // Acceleration / braking
                     previousAccelerationValue_g27 = finalValueAccel;
                 }
 
-                if (steering != previousSteeringValue_g27)
+                if (steeringValue != previousSteeringValue_g27)
                 {
-                    UpdateESC(steering); // Steering
-                    previousSteeringValue_g27 = steering;
+                    steering = steeringValue;
+                    UpdateESC(); // Steering
+                    previousSteeringValue_g27 = steeringValue;
                 }
             }
         }
 
-        //security
+        // Safety features
         private void TeslaRC_LostFocus(object sender, EventArgs e)
         {
             g27.Stop();
-            throttle = 1500; //for safety
+            throttle = 1500; // Safety stop
+            focused = false;
         }
 
         private void TeslaRC_GotFocus(object sender, EventArgs e)
         {
             g27.Start();
+            focused = true;
         }
 
         #endregion
 
         #region ESC
-        private void UpdateESC(int value)
+
+        private void UpdateESC()
         {
-            if (value != previousThrottleValuee)
+            if (checkBox4.Checked)
             {
-                // Send throttle value to the LAN device
-                string ipAddress = "172.26.173.165"; // LAN IP
-                int port = 12345; // LAN PORT
-                
-                if (value >= 1000 && value <= 2000)
+                reverse = (currentGear == 6 || currentGear == 7);
+
+                if (reverse)
                 {
-                    programtext.AppendText($"Throttle: {value}\n");
-                    programtext.SelectionStart = programtext.Text.Length;
-                    programtext.ScrollToCaret();
-                } else if (value >= 2001 && value <= 2181)
-                {
-                    programtext.AppendText($"Steering: {value-2000}\n");
-                    programtext.SelectionStart = programtext.Text.Length;
-                    programtext.ScrollToCaret();
+                    throttle = throttle == 1500 ? throttle : Map(throttle, 2000, 0, 1500, 1000);
                 }
 
-                using (UdpClient udpClient = new UdpClient())
+                switch (currentGear)
                 {
-                    byte[] data = BitConverter.GetBytes(value);
-
-                    if (BitConverter.IsLittleEndian)
-                    {
-                        System.Array.Reverse(data);
-                    }
-
-                    udpClient.Send(data, data.Length, ipAddress, port);
+                    case 0:
+                        maxThrottle = 1500;
+                        break;
+                    case 1:
+                        maxThrottle = 1600;
+                        break;
+                    case 2:
+                        maxThrottle = 1700;
+                        break;
+                    case 3:
+                        maxThrottle = 1800;
+                        break;
+                    case 4:
+                        maxThrottle = 1900;
+                        break;
+                    case 5:
+                        maxThrottle = 2000;
+                        break;
+                    case 6:
+                    case 7:
+                        maxThrottle = reverse ? 2000 : 1500;
+                        break;
                 }
+            } else
+            {
+                Console.WriteLine(throttle);
+                if (throttle == 1500)
+                {
+                    currentGear = 0;
+                }
+                else if (throttle > 1500 && throttle < 1600)
+                {
+                    currentGear = 1;
+                } else if (throttle > 1600 && throttle < 1700)
+                {
+                    currentGear = 2;
+                } else if (throttle > 1700 && throttle < 1800)
+                {
+                    currentGear = 3;
+                } else if (throttle > 1800 && throttle < 1900)
+                {
+                    currentGear = 4;
+                } else if (throttle > 1900 && throttle < 2000)
+                {
+                    currentGear = 5;
+                } else if (throttle < 1500)
+                {
+                    currentGear = 7;
+                }
+                updateGearColor();
+            }
 
-                previousThrottleValuee = value;
+            if (throttle == defaultThrottleValue) // Reset throttle slider
+            {
+                pictureBox2.Width = 5;
+
+                w.ForeColor = SystemColors.ControlText;
+                s.ForeColor = SystemColors.ControlText;
+            }
+
+            if (steering == defaultSteeringValue) { // Reset Steering Sliders
+                LeftSteering.Location = new Point(341, 120); // left
+                LeftSteering.Width = 5;                      // left
+                RightSteering.Width = 5;                     // right
+
+                a.ForeColor = SystemColors.ControlText;
+                d.ForeColor = SystemColors.ControlText;
+            }
+
+            if (throttle > defaultThrottleValue) // Forward Button Color
+            {
+                w.ForeColor = Color.Red;
+            }
+            
+            if (throttle < defaultThrottleValue && !reverse) // Backward Button Color
+            {
+                s.ForeColor = Color.Red;
+            }
+            
+            if (steering > defaultSteeringValue) // Right Button Color
+            {
+                d.ForeColor = Color.Red;
+            }
+            
+            if (steering < defaultSteeringValue) // Left Button Color
+            {
+                a.ForeColor = Color.Red;
+            }
+
+            if (throttle != previousThrottleValue) // Update values
+            {
+                if (!focused) throttle = 1500; // Safety stop
+
+                Console.WriteLine("throttle: " + throttle + " smooth: " + smoothThrottle + " reverse: " + reverse);
+                sioclient.EmitAsync("throttle", throttle);
+
+                previousThrottleValue = throttle;
+            }
+            
+            if (steering != previousSteeringValue)
+            {
+                if (!focused) steering = 90; // Safety stop
+                sioclient.EmitAsync("steering", steering);
+                previousSteeringValue = steering;
             }
         }
         #endregion
 
         #region Keyboard
-        private void keydown(object sender, KeyEventArgs e)
+        bool smoothThrottle = false;
+        private void keyDownUpdate(object sender, EventArgs e)
         {
-            if (e.KeyCode == Keys.W)
+            if (Keyboard.IsKeyDown(Key.W)) // Forwards
             {
-                w.ForeColor = Color.Red;
-                throttle = 2000;
-                UpdateESC(throttle);
+                if (!smoothThrottle)
+                {
+                    throttle = 1500;
+                    smoothThrottle = true;
+                }
+
+                if (smoothThrottle) throttle = throttle + 5 > maxThrottle ? maxThrottle : throttle + 5;
+                if (reverse) pictureBox2.Width = Map(throttle + 1, 1500, 1341, 5, 330);
+                else pictureBox2.Width = Map(throttle + 1, 1500, maxThrottle + 1, 5, 330);
+
+                UpdateESC();
             }
-            if (e.KeyCode == Keys.S)
+
+            if (Keyboard.IsKeyDown(Key.S)) // Backwards
             {
-                s.ForeColor = Color.Red;
-                throttle = 1000;
-                UpdateESC(throttle);
+                if (checkBox4.Checked)
+                {
+                    if (currentGear != 6 && currentGear != 7) return;
+                } else
+                {
+                    currentGear = 7;
+                }
+                throttle = reverse ? 1500 : 1000;
+
+                if (!reverse) pictureBox3.Width = Map(throttle, 1500, throttle, 0, 330);
+                else pictureBox3.Width = 330;
+
+                UpdateESC();
             }
-            if (e.KeyCode == Keys.A)
+
+            if (Keyboard.IsKeyDown(Key.A)) // Left
             {
-                a.ForeColor = Color.Red;
-                throttle = 2001; //steering
-                UpdateESC(throttle);
+                LeftSteering.Location = new Point(181, 120); // steering left
+                LeftSteering.Width = 165;                    // steering left
+                steering = 0;                                // steering
+                UpdateESC();
             }
-            if (e.KeyCode == Keys.D)
+
+            if (Keyboard.IsKeyDown(Key.D)) // Right
             {
-                d.ForeColor = Color.Red;
-                throttle = 2181; //steering
-                UpdateESC(throttle);
+                RightSteering.Width = 170; // steering right
+                steering = 180;            // steering right
+                UpdateESC();
             }
         }
 
-        private void keyup(object sender, KeyEventArgs e)
+        private void updateGearColor()
         {
-            if (e.KeyCode == Keys.W)
+            Label[] labelList = { label4, label13, label10, label8, label11, label9, label12 };
+
+            switch (currentGear)
             {
-                w.ForeColor = SystemColors.ControlText;
-                throttle = 1500;
-                UpdateESC(throttle);
+                case 0:
+                    foreach (Label label in labelList)
+                    {
+                        label.BackColor = SystemColors.Control;
+                        if (label == label13) label.BackColor = Color.IndianRed;
+                    }
+                    break;
+                case 1:
+                    foreach (Label label in labelList)
+                    {
+                        label.BackColor = SystemColors.Control;
+                        if (label == label4) label.BackColor = Color.IndianRed;
+                    }
+                    break;
+                case 2:
+                    foreach (Label label in labelList)
+                    {
+                        label.BackColor = SystemColors.Control;
+                        if (label == label10) label.BackColor = Color.IndianRed;
+                    }
+                    break;
+                case 3:
+                    foreach (Label label in labelList)
+                    {
+                        label.BackColor = SystemColors.Control;
+                        if (label == label8) label.BackColor = Color.IndianRed;
+                    }
+                    break;
+                case 4:
+                    foreach (Label label in labelList)
+                    {
+                        label.BackColor = SystemColors.Control;
+                        if (label == label11) label.BackColor = Color.IndianRed;
+                    }
+                    break;
+                case 5:
+                    foreach (Label label in labelList)
+                    {
+                        label.BackColor = SystemColors.Control;
+                        if (label == label9) label.BackColor = Color.IndianRed;
+                    }
+                    break;
+                case 6:
+                case 7:
+                    foreach (Label label in labelList)
+                    {
+                        label.BackColor = SystemColors.Control;
+                        if (label == label12) label.BackColor = Color.IndianRed;
+                    }
+                    break;
+
             }
-            if (e.KeyCode == Keys.S)
+        }
+
+        private void checkBox4_CheckedChanged(object sender, EventArgs e)
+        {
+            currentGear = 0;
+            updateGearColor();
+
+            if (!checkBox4.Checked)
             {
-                s.ForeColor = SystemColors.ControlText;
-                throttle = 1500;
-                UpdateESC(throttle);
+                maxThrottle = 2000;
+                reverse = false;
             }
-            if (e.KeyCode == Keys.A)
+        }
+
+        private void keydown(object sender, System.Windows.Forms.KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.ShiftKey) // Gear up 
             {
-                a.ForeColor = SystemColors.ControlText;
-                throttle = 2091; //steering
-                UpdateESC(throttle);
+                if (checkBox4.Checked)
+                {
+                    if (currentGear < 5) currentGear++;
+                    else if (currentGear == 6) currentGear = 0;
+                    updateGearColor();
+                }
             }
-            if (e.KeyCode == Keys.D)
+
+            if (e.KeyCode == Keys.ControlKey) // Gear down
             {
-                d.ForeColor = SystemColors.ControlText;
-                throttle = 2091; //steering
-                UpdateESC(throttle);
+                if (checkBox4.Checked)
+                {
+                    if (currentGear == 0) currentGear = 6;
+                    else if (currentGear == 6) currentGear = 6;
+                    else if (currentGear > 0) currentGear--;
+                    updateGearColor();
+                }
+            }
+        }
+
+        private void keyup(object sender, System.Windows.Forms.KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.W || e.KeyCode == Keys.S) // Reset throttle
+            {
+                smoothThrottle = false;
+                throttle = defaultThrottleValue;
+                UpdateESC();
+            }
+
+            if (e.KeyCode == Keys.S) // Brake slider
+            {
+                pictureBox3.Width = 5;
+            }
+
+            if (e.KeyCode == Keys.A || e.KeyCode == Keys.D) // Reset steering
+            {
+                steering = defaultSteeringValue;
+                UpdateESC();
             }
         }
         #endregion
@@ -410,11 +776,21 @@ namespace TeslaRC
         #region App closing handling
         void OnFormClosing(object sender, FormClosingEventArgs e)
         {
+            sioclient.Dispose();
+
+            g27.Stop();
+
             _pipeline.SetState(State.Null);
             _pipeline.Dispose();
             _mainLoop.Quit();
         }
 
         #endregion
-    }
+
+        private void button22_Click(object sender, EventArgs e)
+        {
+            Settings form3 = new Settings();
+            form3.ShowDialog(this);
+        }
+    } 
 }
