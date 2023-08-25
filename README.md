@@ -41,7 +41,7 @@ TeslaRC Ground Station is designed to provide a comprehensive control interface 
 
 2. Install the required GStreamer libraries and .NET Framework on your machine.
 
-3. Open the `TeslaRC.sln` solution file in your preferred IDE (Visual Studio, Visual Studio Code, etc.).
+3. Open the `TeslaRC.sln` solution file in Visual Studio.
 
 4. Build the solution to compile the application. (remember, move `LogitechSteeringWheelEnginesWrapper.dll` from lib/ to working directory of your app (that's where your exe is))
 
@@ -65,7 +65,7 @@ This project is licensed under the **GNU GPL** license. You are free to use, mod
 
 ## Acknowledgements
 
-- The TeslaRC Ground Station software is developed by [tesla](https://github.com/tesla15).
+- The TeslaRC Ground Station software is developed by [tesla](https://github.com/tesla15) and [arin](https://github.com/arin2115).
 - Special thanks to contributors and the open-source community for their valuable contributions and support.
 
 ---
