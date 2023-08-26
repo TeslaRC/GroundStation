@@ -736,6 +736,7 @@ namespace TeslaRC
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.BackColor = System.Drawing.Color.WhiteSmoke;
             this.ClientSize = new System.Drawing.Size(1344, 572);
             this.Controls.Add(this.pictureBox11);
             this.Controls.Add(this.label16);
@@ -789,6 +790,7 @@ namespace TeslaRC
             this.MaximizeBox = false;
             this.Name = "TeslaRC";
             this.ShowIcon = false;
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "TeslaRC";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.OnFormClosing);
             this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.keydown);

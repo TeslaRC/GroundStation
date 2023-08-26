@@ -57,7 +57,13 @@ namespace TeslaRC
         IntPtr _videoPanelHandle;
         System.Threading.Thread _mainGlibThread;
         GLib.MainLoop _mainLoop;
+
+        //safety heartbeat
+        bool connectedToServer;
+        Timer heartbeatTimer;
+        int heartbeatInterval = 300;
         #endregion
+
 
         #region Math
         private int Map(int value, int fromMin, int fromMax, int toMin, int toMax)
@@ -105,8 +111,13 @@ namespace TeslaRC
             kb.Start();
 
             // Safety
-            LostFocus += TeslaRC_LostFocus;
-            GotFocus += TeslaRC_GotFocus;
+            Deactivate += new EventHandler(TeslaRC_LostFocus);
+            Activated += new EventHandler(TeslaRC_GotFocus);
+                // Set up heartbeat timer
+                heartbeatTimer = new Timer();
+                heartbeatTimer.Interval = heartbeatInterval;
+                heartbeatTimer.Tick += heartbeat_tick;
+                heartbeatTimer.Start();
 
             // Reset throttle & steering
             throttle = defaultThrottleValue;
@@ -123,10 +134,12 @@ namespace TeslaRC
 
             sioclient.ConnectAsync();
 
+
             #region SocketIO events
             sioclient.OnConnected += (sender, e) =>
             {
                 Console.WriteLine("Connected to socket.io server");
+                connectedToServer = true;
 
                 // Setup combo boxes
                 comboBox1.Invoke((MethodInvoker)delegate
@@ -153,7 +166,7 @@ namespace TeslaRC
             sioclient.OnDisconnected += (sender, e) =>
             {
                 Console.WriteLine("Disconnected from socket.io server");
-
+                connectedToServer = false;
                 sioclient.ConnectAsync();
             };
 
@@ -180,6 +193,13 @@ namespace TeslaRC
                 }
             });
             #endregion
+        }
+        private void heartbeat_tick(object sender, EventArgs e)
+        {
+            if (connectedToServer)
+            {
+                sioclient.EmitAsync("heartbeat");
+            }
         }
         #endregion
 
@@ -469,13 +489,16 @@ namespace TeslaRC
         {
             g27.Stop();
             throttle = 1500; // Safety stop
+            UpdateESC();
             focused = false;
+            Console.WriteLine("Lost focus");
         }
 
         private void TeslaRC_GotFocus(object sender, EventArgs e)
         {
             g27.Start();
             focused = true;
+            Console.WriteLine("Got focus");
         }
 
         #endregion
@@ -525,16 +548,16 @@ namespace TeslaRC
                 {
                     currentGear = 0;
                 }
-                else if (throttle > 1500 && throttle < 1600)
+                else if (throttle > 1650 && throttle < 1700)
                 {
                     currentGear = 1;
-                } else if (throttle > 1600 && throttle < 1700)
+                } else if (throttle > 1650 && throttle < 1800)
                 {
                     currentGear = 2;
-                } else if (throttle > 1700 && throttle < 1800)
+                } else if (throttle > 1700 && throttle < 1900)
                 {
                     currentGear = 3;
-                } else if (throttle > 1800 && throttle < 1900)
+                } else if (throttle > 1800 && throttle < 1995)
                 {
                     currentGear = 4;
                 } else if (throttle > 1900 && throttle < 2000)
@@ -607,17 +630,21 @@ namespace TeslaRC
         bool smoothThrottle = false;
         private void keyDownUpdate(object sender, EventArgs e)
         {
+            if (!focused)
+                return;
+               
+
             if (Keyboard.IsKeyDown(Key.W)) // Forwards
             {
                 if (!smoothThrottle)
                 {
-                    throttle = 1500;
+                    throttle = 1650;
                     smoothThrottle = true;
                 }
 
                 if (smoothThrottle) throttle = throttle + 5 > maxThrottle ? maxThrottle : throttle + 5;
-                if (reverse) pictureBox2.Width = Map(throttle + 1, 1500, 1341, 5, 330);
-                else pictureBox2.Width = Map(throttle + 1, 1500, maxThrottle + 1, 5, 330);
+                if (reverse) pictureBox2.Width = Map(throttle + 1, 1500, 1100, 5, 330);
+                else pictureBox2.Width = Map(throttle + 1, 1650, maxThrottle + 1, 5, 330);
 
                 UpdateESC();
             }
